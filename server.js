@@ -19,8 +19,13 @@ if (!fs.existsSync(TRACKS_FILE)) fs.writeFileSync(TRACKS_FILE, '[]');
 
 // Middleware
 app.use(cors());
-app.use('/uploads', express.static(UPLOADS_DIR));
-app.use(express.static('public')); // Votre index.html
+app.use('/uploads', express.static(UPLOADS_DIR)); // ✅ Sert les fichiers uploadés
+app.use(express.static('public')); // Sert le frontend
+
+// Route de santé (obligatoire pour Railway)
+app.get('/', (req, res) => {
+  res.json({ status: 'ParisZik Server en ligne ✅' });
+});
 
 // Stockage multer
 const storage = multer.diskStorage({
@@ -39,12 +44,12 @@ const upload = multer({ storage });
 // GET /api/tracks - Liste toutes les musiques
 app.get('/api/tracks', (req, res) => {
   fs.readFile(TRACKS_FILE, 'utf8', (err, data) => {
-    if (err) return res.status(500).send('Erreur');
+    if (err) return res.status(500).send('Erreur lecture');
     res.json(JSON.parse(data));
   });
 });
 
-// POST /api/admin/add - Ajouter une musique (admin)
+// POST /api/admin/add - Ajouter une musique
 app.post('/api/admin/add', upload.single('audio'), (req, res) => {
   const { title, artist } = req.body;
   const file = req.file;
@@ -57,7 +62,7 @@ app.post('/api/admin/add', upload.single('audio'), (req, res) => {
     id: Date.now(),
     title: title,
     artist: artist || 'Inconnu',
-    fileURL: `/uploads/${file.filename}`,
+    fileURL: `/uploads/${file.filename}`, // ✅ URL correcte
     cover: '/public/assets/default-cover.jpg',
     addedAt: new Date().toISOString()
   };
@@ -65,13 +70,12 @@ app.post('/api/admin/add', upload.single('audio'), (req, res) => {
   // Lire et mettre à jour tracks.json
   fs.readFile(TRACKS_FILE, 'utf8', (err, data) => {
     if (err) return res.status(500).send('Erreur lecture');
-
     const tracks = JSON.parse(data);
     tracks.unshift(newTrack);
 
     fs.writeFile(TRACKS_FILE, JSON.stringify(tracks, null, 2), (err) => {
       if (err) return res.status(500).send('Erreur écriture');
-      res.json(newTrack);
+      res.json(newTrack); // ✅ On renvoie le morceau avec fileURL
     });
   });
 });
