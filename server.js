@@ -4,95 +4,111 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 
+// === Cloudinary Configuration ===
+const cloudinary = require('cloudinary').v2;
+cloudinary.config({
+  cloud_name: 'dc0xbw9fc',
+  api_key: '997467975132184',
+  api_secret: 'bVu5BMIRfkSPUmiz8nLgZP03hzA'
+});
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Dossiers
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const DATA_DIR = path.join(__dirname, 'data');
 const TRACKS_FILE = path.join(DATA_DIR, 'tracks.json');
 
-// Créer les dossiers si besoin
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR);
+// Créer data/ si besoin
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 if (!fs.existsSync(TRACKS_FILE)) fs.writeFileSync(TRACKS_FILE, '[]');
 
 // Middleware
 app.use(cors());
-app.use('/uploads', express.static(UPLOADS_DIR)); // ✅ Sert les fichiers uploadés
-app.use(express.static('public')); // Sert le frontend
+app.use(express.static('public'));
 
-// Route de santé (obligatoire pour Railway)
+// Route de santé
 app.get('/', (req, res) => {
   res.json({ status: 'ParisZik Server en ligne ✅' });
 });
 
-// Stockage multer
+// Stockage temporaire pour multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, UPLOADS_DIR);
+    cb(null, 'uploads/');
   },
   filename: (req, file, cb) => {
-    const uniqueName = Date.now() + '-' + file.originalname;
+    const uniqueName = Date.now() + '-' + file.originalname.replace(/\s+/g, '-');
     cb(null, uniqueName);
   }
 });
 const upload = multer({ storage });
 
+// Créer le dossier uploads localement (temporaire)
+if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
+
 // === API Routes ===
 
-// GET /api/tracks - Liste toutes les musiques
+// GET /api/tracks
 app.get('/api/tracks', (req, res) => {
   fs.readFile(TRACKS_FILE, 'utf8', (err, data) => {
-    if (err) return res.status(500).send('Erreur lecture');
+    if (err) return res.status(500).json({ error: 'Erreur lecture tracks.json' });
     res.json(JSON.parse(data));
   });
 });
 
-// POST /api/admin/add - Ajouter une musique
-app.post('/api/admin/add', upload.single('audio'), (req, res) => {
+// POST /api/admin/add
+app.post('/api/admin/add', upload.single('audio'), async (req, res) => {
   const { title, artist } = req.body;
   const file = req.file;
 
-  if (!file || !title) {
-    return res.status(400).json({ error: 'Fichier ou titre manquant' });
-  }
+  if (!file) return res.status(400).json({ error: 'Aucun fichier audio reçu' });
+  if (!title) return res.status(400).json({ error: 'Titre manquant' });
 
-  const newTrack = {
-    id: Date.now(),
-    title: title,
-    artist: artist || 'Inconnu',
-    fileURL: `/uploads/${file.filename}`, // ✅ URL correcte
-    cover: '/public/assets/default-cover.jpg',
-    addedAt: new Date().toISOString()
-  };
-
-  // Lire et mettre à jour tracks.json
-  fs.readFile(TRACKS_FILE, 'utf8', (err, data) => {
-    if (err) return res.status(500).send('Erreur lecture');
-    const tracks = JSON.parse(data);
-    tracks.unshift(newTrack);
-
-    fs.writeFile(TRACKS_FILE, JSON.stringify(tracks, null, 2), (err) => {
-      if (err) return res.status(500).send('Erreur écriture');
-      res.json(newTrack); // ✅ On renvoie le morceau avec fileURL
+  try {
+    // Upload vers Cloudinary
+    const result = await cloudinary.uploader.upload(file.path, {
+      resource_type: 'video', // Fonctionne pour .mp3
+      folder: 'pariszik-audios',
+      format: 'mp3'
     });
-  });
+
+    // Supprimer le fichier local après upload
+    fs.unlinkSync(file.path);
+
+    const newTrack = {
+      id: Date.now(),
+      title: title.trim(),
+      artist: artist?.trim() || 'Inconnu',
+      fileURL: result.secure_url, // URL permanente
+      cover: '/public/assets/default-cover.jpg',
+      addedAt: new Date().toISOString()
+    };
+
+    // Lire et mettre à jour tracks.json
+    fs.readFile(TRACKS_FILE, 'utf8', (err, data) => {
+      if (err) return res.status(500).json({ error: 'Erreur lecture tracks.json' });
+      const tracks = JSON.parse(data || '[]');
+      tracks.unshift(newTrack);
+      fs.writeFile(TRACKS_FILE, JSON.stringify(tracks, null, 2), (err) => {
+        if (err) return res.status(500).json({ error: 'Erreur écriture tracks.json' });
+        res.json(newTrack);
+      });
+    });
+  } catch (err) {
+    console.error('Erreur Cloudinary:', err);
+    return res.status(500).json({ error: 'Échec upload Cloudinary' });
+  }
 });
 
-// DELETE /api/admin/delete/:id - Supprimer une musique
+// DELETE /api/admin/delete/:id
 app.delete('/api/admin/delete/:id', (req, res) => {
   const id = parseInt(req.params.id);
-
   fs.readFile(TRACKS_FILE, 'utf8', (err, data) => {
-    if (err) return res.status(500).send('Erreur');
+    if (err) return res.status(500).json({ error: 'Erreur lecture' });
     let tracks = JSON.parse(data);
     const track = tracks.find(t => t.id === id);
-    if (!track) return res.status(404).send('Non trouvé');
-
-    // Supprimer le fichier
-    const filePath = path.join(__dirname, track.fileURL);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    if (!track) return res.status(404).json({ error: 'Non trouvé' });
 
     tracks = tracks.filter(t => t.id !== id);
     fs.writeFile(TRACKS_FILE, JSON.stringify(tracks, null, 2), () => {
@@ -104,4 +120,7 @@ app.delete('/api/admin/delete/:id', (req, res) => {
 // Démarrer le serveur
 app.listen(PORT, () => {
   console.log(`🎧 ParisZik Server en ligne sur http://localhost:${PORT}`);
+  console.log(`📁 Dossier temporaire : uploads/`);
 });
+
+module.exports = app;
