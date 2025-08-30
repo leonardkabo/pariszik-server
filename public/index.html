@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎧 ParisZik</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ff1493;
+            --secondary: #00ffff;
+            --accent: #ffff00;
+            --dark: #0f0c29;
+            --card: rgba(30, 25, 60, 0.8);
+            --hover: rgba(0, 255, 255, 0.1);
+            --success: #32cd32;
+            --danger: #ff4500;
+        }
+
+        * {
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--dark), #1a1a3a, #24243e);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            backdrop-filter: blur(10px);
+            background: rgba(15, 12, 41, 0.95);
+            border-bottom: 1px solid var(--secondary);
+        }
+
+        .navbar-brand {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+
+        .sidebar {
+            min-height: 100vh;
+            background: rgba(15, 12, 41, 0.9);
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 250px;
+            padding: 2rem 1rem;
+        }
+
+        .sidebar .nav-link {
+            color: #a0e7ff;
+            margin: 0.5rem 0;
+            padding: 0.8rem 1rem;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background: var(--hover);
+            color: var(--secondary);
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 2rem;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 255, 255, 0.2);
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            border: none;
+        }
+
+        .btn-radio {
+            background: linear-gradient(45deg, var(--secondary), var(--accent));
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0, 255, 255, 0.4);
+            transition: all 0.3s ease;
+            margin: 1rem 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .radio-controls {
+            margin: 1rem 0;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+        }
+
+        .player {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            padding: 0 1rem;
+            z-index: 1000;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: -400px;
+            background: var(--success);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            z-index: 2000;
+            transition: right 0.5s;
+        }
+
+        .notification.show {
+            right: 20px;
+        }
+
+        .dropzone {
+            border: 2px dashed var(--secondary);
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            color: var(--secondary);
+            cursor: pointer;
+            margin: 20px 0;
+        }
+
+        .track-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            margin: 10px 0;
+            border-radius: 8px;
+        }
+
+        .cover-mini {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Notification -->
+<div id="notification" class="notification">Bienvenue sur ParisZik !</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand">Paris<span style="color:var(--secondary)">Zik</span></a>
+        <div class="d-flex">
+            <button class="btn btn-sm btn-outline-light me-2" id="loginBtn">Connexion</button>
+            <button class="btn btn-primary" id="adminBtn">Admin</button>
+        </div>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<div class="sidebar">
+    <ul class="nav flex-column">
+        <li class="nav-item">
+            <a class="nav-link active" href="#" data-page="home"><i class="fas fa-home"></i> Accueil</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" data-page="library"><i class="fas fa-music"></i> Bibliothèque</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" data-page="admin" style="display: none;" id="adminLink">⚙️ Admin</a>
+        </li>
+    </ul>
+</div>
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Page: Accueil -->
+    <div id="home">
+        <h2>🎵 En ce moment à Paris</h2>
+        <p>Découvrez la musique qui fait battre le cœur de Paris</p>
+
+        <!-- Bouton Radio -->
+        <button id="startRadioBtn" class="btn-radio">
+            <i class="fas fa-play"></i> Écouter la Radio
+        </button>
+
+        <!-- Contrôles Radio -->
+        <div class="radio-controls" id="radioControls" style="display: none;">
+            <label>
+                <input type="checkbox" id="shuffleToggle"> Mode aléatoire
+            </label>
+            <label style="margin-left: 20px;">
+                <input type="checkbox" id="repeatToggle" checked> Répéter
+            </label>
+            <button class="btn btn-sm btn-danger" id="stopRadioBtn" style="margin-left: 20px;">
+                <i class="fas fa-stop"></i> Arrêter
+            </button>
+        </div>
+
+        <div class="row mt-4" id="featuredTracks"></div>
+    </div>
+
+    <!-- Page: Bibliothèque -->
+    <div id="library" style="display: none;">
+        <h2>📚 Votre Bibliothèque</h2>
+        <!-- Upload section (admin only) -->
+        <div id="uploadSection" style="display: none;">
+            <div class="dropzone" id="dropzone">
+                <i class="fas fa-music"></i> Glissez un fichier .mp3 ici
+                <input type="file" id="fileInput" accept="audio/*" style="display: none;">
+            </div>
+        </div>
+        <div id="userTracks"></div>
+    </div>
+
+    <!-- Page: Admin -->
+    <div id="admin" style="display: none;">
+        <h2>⚙️ Panel d'Administration</h2>
+        <button class="btn btn-danger mt-3" id="logoutAdmin">Déconnexion</button>
+        <h4 class="mt-4">🗂️ Gestion des Musiques</h4>
+        <div id="adminTracksList"></div>
+    </div>
+</div>
+
+<!-- Player -->
+<div class="player" id="player" style="display: none;">
+    <img id="playerCover" src="assets/default-cover.jpg" width="60" class="rounded me-3">
+    <div style="flex: 1;">
+        <strong id="nowPlaying">Aucune musique</strong><br>
+        <small id="nowArtist">-</small>
+    </div>
+    <button class="btn btn-sm btn-outline-light me-2"><i class="fas fa-step-backward"></i></button>
+    <button class="btn btn-primary btn-sm me-2" id="playPauseBtn"><i class="fas fa-play"></i></button>
+    <button class="btn btn-sm btn-outline-light me-2"><i class="fas fa-step-forward"></i></button>
+    <button class="btn btn-sm btn-outline-light" id="likeBtn"><i class="far fa-heart"></i></button>
+</div>
+
+<audio id="audio"></audio>
+
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        const audio = document.getElementById('audio');
+        const player = document.getElementById('player');
+        const playerCover = document.getElementById('playerCover');
+        const nowPlaying = document.getElementById('nowPlaying');
+        const nowArtist = document.getElementById('nowArtist');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const likeBtn = document.getElementById('likeBtn');
+        const notification = document.getElementById('notification');
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const logoutAdmin = document.getElementById('logoutAdmin');
+
+        // === URL du serveur (à changer selon votre déploiement) ===
+        const API_URL = 'https://pariszik-server.up.railway.app'; // ← Remplacez par votre URL Railway
+
+        // Pages
+        const home = document.getElementById('home');
+        const library = document.getElementById('library');
+        const admin = document.getElementById('admin');
+        const uploadSection = document.getElementById('uploadSection');
+
+        // Boutons radio
+        const startRadioBtn = document.getElementById('startRadioBtn');
+        const stopRadioBtn = document.getElementById('stopRadioBtn');
+        const radioControls = document.getElementById('radioControls');
+        const shuffleToggle = document.getElementById('shuffleToggle');
+        const repeatToggle = document.getElementById('repeatToggle');
+
+        // Données
+        let tracks = [];
+        let isAdmin = false;
+        let isRadioPlaying = false;
+        let currentIndex = 0;
+
+        // === Charger les musiques depuis le serveur ===
+        async function loadTracks() {
+            try {
+                const res = await fetch(`${API_URL}/api/tracks`);
+                tracks = await res.json();
+                renderAll();
+            } catch (err) {
+                showNotification('❌ Impossible de charger les musiques', 'error');
+            }
+        }
+
+        // === Notifications ===
+        function showNotification(msg, type = 'success') {
+            notification.textContent = msg;
+            notification.style.background = type === 'error' ? 'var(--danger)' : 'var(--success)';
+            notification.classList.add('show');
+            setTimeout(() => notification.classList.remove('show'), 3000);
+        }
+
+        // === Afficher une page ===
+        function showPage(page) {
+            [home, library, admin].forEach(p => p.style.display = 'none');
+            page.style.display = 'block';
+        }
+
+        document.querySelectorAll('[data-page]').forEach(link => {
+            link.addEventListener('click', e => {
+                e.preventDefault();
+                const page = e.target.dataset.page;
+                if (page === 'admin' && !isAdmin) {
+                    showNotification('Accès refusé', 'error');
+                    return;
+                }
+                showPage(document.getElementById(page));
+            });
+        });
+
+        // === Gestion Admin ===
+        document.getElementById('adminBtn').addEventListener('click', () => {
+            const pwd = prompt('Mot de passe admin :');
+            if (pwd === 'admin123') {
+                isAdmin = true;
+                document.getElementById('adminLink').style.display = 'block';
+                uploadSection.style.display = 'block';
+                showPage(admin);
+                renderAdminTracks();
+                setupFileInput();
+                showNotification('🔐 Accès admin autorisé');
+            } else {
+                showNotification('Mot de passe incorrect', 'error');
+            }
+        });
+
+        logoutAdmin.addEventListener('click', () => {
+            stopRadio();
+            isAdmin = false;
+            document.getElementById('adminLink').style.display = 'none';
+            uploadSection.style.display = 'none';
+            showPage(home);
+            showNotification('Déconnexion admin');
+        });
+
+        // === Gestion du fichier (uniquement si admin) ===
+        function setupFileInput() {
+            fileInput.onchange = null;
+            dropzone.onclick = () => fileInput.click();
+
+            ['dragover', 'dragenter'].forEach(evt => {
+                dropzone.addEventListener(evt, e => {
+                    e.preventDefault();
+                    if (isAdmin) dropzone.style.borderColor = 'var(--accent)';
+                });
+            });
+
+            ['dragleave', 'dragend'].forEach(evt => {
+                dropzone.addEventListener(evt, () => {
+                    if (isAdmin) dropzone.style.borderColor = 'var(--secondary)';
+                });
+            });
+
+            dropzone.addEventListener('drop', e => {
+                e.preventDefault();
+                if (isAdmin && e.dataTransfer.files[0]) {
+                    dropzone.style.borderColor = 'var(--secondary)';
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            fileInput.onchange = (e) => {
+                if (isAdmin && e.target.files[0]) {
+                    handleFile(e.target.files[0]);
+                }
+            };
+        }
+
+        // === Ajout de musique (vers le serveur) ===
+        async function handleFile(file) {
+            if (!file.name.endsWith('.mp3')) {
+                return showNotification('⚠️ Fichier invalide', 'error');
+            }
+
+            const fileName = file.name.replace('.mp3', '').split('-').map(s => s.trim()).filter(Boolean);
+            const title = fileName.length > 0 ? fileName[0] : file.name.replace('.mp3', '');
+            const artist = fileName.length > 1 ? fileName[1] : 'Inconnu';
+
+            const formData = new FormData();
+            formData.append('audio', file);
+            formData.append('title', title);
+            formData.append('artist', artist);
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/add`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const newTrack = await res.json();
+                tracks.unshift(newTrack);
+                showNotification(`✅ "${title}" ajouté et en lecture !`);
+                renderAll();
+                playTrack(newTrack);
+            } catch (err) {
+                showNotification('❌ Échec upload serveur', 'error');
+            }
+        }
+
+        // === Lecteur ===
+        function playTrack(track) {
+            audio.src = track.fileURL;
+            nowPlaying.textContent = track.title;
+            nowArtist.textContent = track.artist;
+            playerCover.src = track.cover;
+            player.style.display = 'flex';
+            audio.play().then(() => {
+                playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+            }).catch(() => showNotification('❌ Impossible de lire', 'error'));
+        }
+
+        playPauseBtn.addEventListener('click', () => {
+            if (audio.paused) {
+                audio.play().catch(() => showNotification('❌ Échec', 'error'));
+                playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+            } else {
+                audio.pause();
+                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+            }
+        });
+
+        // === Radio Automatique ===
+        function startRadio() {
+            if (tracks.length === 0) {
+                return showNotification("❌ Aucune musique disponible", 'error');
+            }
+
+            isRadioPlaying = true;
+            startRadioBtn.innerHTML = '<i class="fas fa-spin fa-spinner"></i> Radio en cours...';
+            radioControls.style.display = 'block';
+
+            const playNext = () => {
+                if (!isRadioPlaying) return;
+
+                const index = shuffleToggle.checked
+                    ? Math.floor(Math.random() * tracks.length)
+                    : currentIndex++ % tracks.length;
+
+                const track = tracks[index];
+                playTrack(track);
+                showNotification(`📻 En ce moment : ${track.title} par ${track.artist}`);
+            };
+
+            playNext();
+
+            audio.onended = () => {
+                if (isRadioPlaying && repeatToggle.checked) playNext();
+            };
+        }
+
+        function stopRadio() {
+            if (!isRadioPlaying) return;
+
+            isRadioPlaying = false;
+            audio.pause();
+            audio.src = '';
+            startRadioBtn.innerHTML = '<i class="fas fa-play"></i> Écouter la Radio';
+            radioControls.style.display = 'none';
+            showNotification('⏹️ Radio arrêtée');
+        }
+
+        startRadioBtn.addEventListener('click', () => {
+            if (isRadioPlaying) stopRadio();
+            else startRadio();
+        });
+
+        stopRadioBtn.addEventListener('click', stopRadio);
+
+        // === Affichage ===
+        function renderAll() {
+            renderTracks();
+            renderFeatured();
+            if (isAdmin) renderAdminTracks();
+        }
+
+        function renderTracks() {
+            const container = document.getElementById('userTracks');
+            container.innerHTML = '';
+            tracks.forEach((track, index) => {
+                const div = document.createElement('div');
+                div.className = 'track-item';
+                div.innerHTML = `
+                    <img class="cover-mini" src="${track.cover}" onerror="this.onerror=null;this.src='assets/default-cover.jpg';">
+                    <div style="flex: 1;">${track.title}</div>
+                    <button class="btn btn-sm btn-primary" onclick="window.playTrack(${index})">▶️</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderFeatured() {
+            const container = document.getElementById('featuredTracks');
+            container.innerHTML = '';
+            tracks.slice(0, 3).forEach(track => {
+                const col = document.createElement('div');
+                col.className = 'col-md-4 mb-4';
+                col.innerHTML = `
+                    <div class="card" onclick="window.playTrack(${tracks.indexOf(track)})">
+                        <img src="${track.cover}" onerror="this.onerror=null;this.src='assets/default-cover.jpg';" style="height: 180px; object-fit: cover;">
+                        <div class="card-body">
+                            <h6>${track.title}</h6>
+                            <p class="text-muted">${track.artist}</p>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(col);
+            });
+        }
+
+        function renderAdminTracks() {
+            const container = document.getElementById('adminTracksList');
+            container.innerHTML = '';
+            tracks.forEach((track, index) => {
+                const div = document.createElement('div');
+                div.className = 'card p-3 mb-2';
+                div.innerHTML = `
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <strong>${track.title}</strong> par <small>${track.artist}</small>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-primary me-2" onclick="window.playTrack(${index})">▶️</button>
+                            <button class="btn btn-sm btn-danger" onclick="window.deleteTrack(${index})">🗑️</button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // === Fonctions globales ===
+        window.playTrack = function(index) {
+            stopRadio();
+            const track = tracks[index];
+            if (track) playTrack(track);
+            else showNotification('❌ Morceau introuvable', 'error');
+        };
+
+        window.deleteTrack = async function(index) {
+            if (confirm(`Supprimer "${tracks[index].title}" ?`)) {
+                try {
+                    await fetch(`${API_URL}/api/admin/delete/${tracks[index].id}`, { method: 'DELETE' });
+                    tracks.splice(index, 1);
+                    renderAll();
+                    showNotification('🗑️ Supprimé');
+                } catch (err) {
+                    showNotification('❌ Échec suppression', 'error');
+                }
+            }
+        };
+
+        // === Chargement initial ===
+        await loadTracks();
+        showPage(home);
+    });
+</script>
+</body>
+</html>
