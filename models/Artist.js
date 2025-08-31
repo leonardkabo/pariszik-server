@@ -5,8 +5,7 @@ const ArtistSchema = new mongoose.Schema({
     genre: { type: String },
     bio: { type: String },
     image: { type: String }, // URL de la photo
-    cover: { type: String }, // URL de la bannière
-    isVerified: { type: Boolean, default: false }
+    cover: { type: String }  // URL de la bannière
 }, { timestamps: true });
 
 module.exports = mongoose.model('Artist', ArtistSchema);
