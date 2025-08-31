@@ -1,40 +1,60 @@
+// pariszik-server/server.js
 const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
 const path = require('path');
+const cors = require('cors');
 
 const app = express();
 
-// === CORS : Autoriser Netlify et Railway ===
+// === CORS pour Netlify ===
 app.use(cors({
-    origin: [
-        'https://pariszik.netlify.app',
-        'https://pariszik-server-production.up.railway.app',
-        'http://localhost:5500'
-    ],
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type']
+    origin: ['https://pariszik.netlify.app', 'http://localhost:5500']
 }));
 
 // === Middleware ===
 app.use(express.json());
 
-// === Connexion à MongoDB ===
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost/pariszik', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => {
-    console.log('✅ Connexion à MongoDB réussie');
-}).catch(err => {
-    console.error('❌ Échec connexion MongoDB:', err);
+// === Données en mémoire (pour test) ===
+let tracks = [
+    {
+        id: 1,
+        title: "Métro, boulot, dream",
+        artist: "DJ Metro",
+        fileURL: "https://res.cloudinary.com/demo/video/upload/v123/sample.mp3",
+        cover: "https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp"
+    },
+    {
+        id: 2,
+        title: "Cité des anges",
+        artist: "Zola",
+        fileURL: "https://res.cloudinary.com/demo/video/upload/v123/sample2.mp3",
+        cover: "https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp"
+    }
+];
+
+// === Route API : liste des morceaux ===
+app.get('/api/tracks', (req, res) => {
+    res.json(tracks);
 });
 
-// === Routes ===
-const trackRoutes = require('./routes/api/tracks');
-const artistRoutes = require('./routes/api/artists');
+// === Route API : ajout de morceau (upload simulé) ===
+app.post('/api/admin/add', (req, res) => {
+    const { title = "Sans titre", artist = "Inconnu" } = req.body;
+    const newTrack = {
+        id: Date.now(),
+        title,
+        artist,
+        fileURL: "https://res.cloudinary.com/demo/video/upload/v123/uploaded.mp3",
+        cover: "https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp"
+    };
+    tracks.push(newTrack);
+    res.json(newTrack);
+});
 
-app.use('/api', trackRoutes);
-app.use('/api', artistRoutes);
+// === Route API : suppression ===
+app.delete('/api/admin/delete/:id', (req, res) => {
+    tracks = tracks.filter(t => t.id != req.params.id);
+    res.json({ success: true });
+});
 
 // === Démarrage du serveur ===
 const PORT = process.env.PORT || 3000;
