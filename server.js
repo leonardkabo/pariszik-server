@@ -3,6 +3,7 @@ const multer = require('multer');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const artistRoutes = require('./routes/api/artists');
 
 // === Cloudinary Configuration ===
 const cloudinary = require('cloudinary').v2;
@@ -26,6 +27,7 @@ if (!fs.existsSync(TRACKS_FILE)) fs.writeFileSync(TRACKS_FILE, '[]');
 // Middleware
 app.use(cors());
 app.use(express.static('public'));
+app.use('/api', artistRoutes);
 
 // Route de santé
 app.get('/', (req, res) => {
