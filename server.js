@@ -6,30 +6,25 @@ const streamifier = require('streamifier');
 
 const app = express();
 
-// === Configuration Cloudinary ===
+// === Cloudinary ===
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dc0xbw9fc',
     api_key: process.env.CLOUDINARY_API_KEY || '997467975132184',
     api_secret: process.env.CLOUDINARY_API_SECRET || 'bVu5BMIRfkSPUmiz8nLgZP03hzA'
 });
 
-// === CORS ===
-app.use(cors({
-    origin: 'https://pariszik.netlify.app',
-    methods: ['GET', 'POST', 'DELETE'],
-    allowedHeaders: ['Content-Type']
-}));
-
+// === Middleware ===
+app.use(cors({ origin: 'https://pariszik.netlify.app' }));
 app.use(express.json());
 
-// === Upload ===
 const upload = multer({ storage: multer.memoryStorage() });
 
-// === Liste des morceaux ===
+// === Données en mémoire ===
 let tracks = [];
+let playlists = [];
 
-// === Charger les morceaux existants depuis Cloudinary au démarrage ===
-async function loadTracksFromCloudinary() {
+// === Charger les morceaux existants depuis Cloudinary ===
+async function loadExistingTracks() {
     try {
         const result = await cloudinary.api.resources({
             type: 'upload',
@@ -42,76 +37,59 @@ async function loadTracksFromCloudinary() {
             id: file.asset_id,
             title: file.original_filename.replace('.mp3', '').split('-')[0] || 'Sans titre',
             artist: file.original_filename.replace('.mp3', '').split('-')[1] || 'Inconnu',
-            genre: 'Inconnu',
             fileURL: file.secure_url,
             cover: 'https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp'
         }));
-
-        console.log(`✅ ${tracks.length} morceaux chargés depuis Cloudinary`);
+        console.log(`✅ ${tracks.length} morceaux chargés`);
     } catch (err) {
-        console.error('Erreur chargement Cloudinary:', err);
+        console.error('Erreur:', err);
     }
 }
 
-// === POST /api/admin/add ===
+// === Routes ===
+app.get('/api/tracks', (req, res) => res.json(tracks));
+
 app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }]), (req, res) => {
-    const { title, artist, genre } = req.body;
+    const { title, artist } = req.body;
     const audioFile = req.files['audio'][0];
-    const coverFile = req.files['cover'] ? req.files['cover'][0] : null;
 
-    const uploadAudioStream = cloudinary.uploader.upload_stream(
+    const stream = cloudinary.uploader.upload_stream(
         { resource_type: 'video', folder: 'pariszik-audio' },
-        (error, audioResult) => {
-            if (error) return res.status(500).json({ error: 'Upload audio échoué' });
-
-            let coverURL = 'https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp';
-
-            if (coverFile) {
-                const uploadCoverStream = cloudinary.uploader.upload_stream(
-                    { resource_type: 'image', folder: 'pariszik-covers' },
-                    (err, coverResult) => {
-                        if (err) console.error('Cover upload failed:', err);
-                        coverURL = coverResult?.secure_url || coverURL;
-                        saveTrack(audioResult, coverURL);
-                    }
-                );
-                streamifier.createReadStream(coverFile.buffer).pipe(uploadCoverStream);
-            } else {
-                saveTrack(audioResult, coverURL);
-            }
+        (error, result) => {
+            if (error) return res.status(500).send('Erreur');
+            const newTrack = {
+                id: Date.now(),
+                title: title || 'Sans titre',
+                artist: artist || 'Inconnu',
+                fileURL: result.secure_url,
+                cover: 'https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp'
+            };
+            tracks.unshift(newTrack);
+            res.json(newTrack);
         }
     );
-
-    function saveTrack(audioResult, coverURL) {
-        const newTrack = {
-            id: Date.now(),
-            title: title || 'Sans titre',
-            artist: artist || 'Inconnu',
-            genre: genre || 'Inconnu',
-            fileURL: audioResult.secure_url,
-            cover: coverURL
-        };
-        tracks.unshift(newTrack);
-        res.json(newTrack);
-    }
-
-    streamifier.createReadStream(audioFile.buffer).pipe(uploadAudioStream);
+    streamifier.createReadStream(audioFile.buffer).pipe(stream);
 });
 
-// === GET /api/tracks ===
-app.get('/api/tracks', (req, res) => {
-    res.json(tracks);
-});
-
-// === DELETE /api/admin/delete/:id ===
 app.delete('/api/admin/delete/:id', (req, res) => {
     tracks = tracks.filter(t => t.id != req.params.id);
     res.json({ success: true });
+});
+
+// === Playlists partagées ===
+app.post('/api/playlists/share', (req, res) => {
+    playlists.push(req.body);
+    res.json({ success: true });
+});
+
+app.get('/api/playlists/share/:id', (req, res) => {
+    const pl = playlists.find(p => p.id === req.params.id);
+    res.json(pl || { error: 'Not found' });
 });
 
 // === Démarrage ===
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
     console.log(`🚀 Serveur lancé sur le port ${PORT}`);
-    await loadTracksFromCloudinary(); // Charger les anciens morceaux
+    await loadExistingTracks();
 });
