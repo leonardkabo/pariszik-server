@@ -87,35 +87,6 @@ app.get('/api/playlists/share/:id', (req, res) => {
     res.json(pl || { error: 'Not found' });
 });
 
-// === Stockage temporaire des playlists partagées ===
-let sharedPlaylists = [];
-
-// === Partager une playlist via lien ===
-app.post('/api/playlists/share', (req, res) => {
-    const { name, trackIds } = req.body;
-    const shareId = Math.random().toString(36).substr(2, 9);
-    sharedPlaylists.push({
-        id: shareId,
-        name,
-        trackIds,
-        createdAt: new Date()
-    });
-    res.json({ success: true, shareId });
-});
-
-// === Récupérer une playlist partagée ===
-app.get('/api/playlists/share/:shareId', (req, res) => {
-    const playlist = sharedPlaylists.find(p => p.id === req.params.shareId);
-    if (!playlist) {
-        return res.status(404).json({ error: 'Playlist introuvable' });
-    }
-    // Renvoie la playlist + les morceaux complets
-    const tracksInPlaylist = tracks.filter(t => playlist.trackIds.includes(t.id));
-    res.json({
-        name: playlist.name,
-        tracks: tracksInPlaylist
-    });
-});
 
 // === Démarrage ===
 const PORT = process.env.PORT || 3000;
