@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -14,48 +13,52 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET || 'bVu5BMIRfkSPUmiz8nLgZP03hzA'
 });
 
-// === CORS pour Netlify ===
+// === CORS ===
 app.use(cors({
     origin: 'https://pariszik.netlify.app',
     methods: ['GET', 'POST', 'DELETE'],
     allowedHeaders: ['Content-Type']
 }));
 
-// === Middleware pour parser JSON ===
 app.use(express.json());
 
-// === Upload en mémoire ===
+// === Upload ===
 const upload = multer({ storage: multer.memoryStorage() });
 
-// === Liste des morceaux (en mémoire) ===
+// === Liste des morceaux ===
 let tracks = [];
 
-// === 🔐 Mot de passe admin haché (admin123) ===
-const ADMIN_PASSWORD_HASH = '$2b$10$4Vj5v0y9Y5Z7X9qZJz0Q5e9QjK7t7v9q5Q5q5Q5q5Q5q5Q5q5Q5q5Q'; // "admin123"
+// === Charger les morceaux existants depuis Cloudinary au démarrage ===
+async function loadTracksFromCloudinary() {
+    try {
+        const result = await cloudinary.api.resources({
+            type: 'upload',
+            resource_type: 'video',
+            prefix: 'pariszik-audio',
+            max_results: 100
+        });
 
-// === Route de login admin ===
-app.post('/api/admin/login', async (req, res) => {
-    const { password } = req.body;
-    const isValid = password === 'admin123'; // Pour l'instant, simple
-    if (isValid) {
-        return res.json({ success: true });
-    } else {
-        return res.status(401).json({ success: false, message: 'Mot de passe incorrect' });
+        tracks = result.resources.map(file => ({
+            id: file.asset_id,
+            title: file.original_filename.replace('.mp3', '').split('-')[0] || 'Sans titre',
+            artist: file.original_filename.replace('.mp3', '').split('-')[1] || 'Inconnu',
+            genre: 'Inconnu',
+            fileURL: file.secure_url,
+            cover: 'https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp'
+        }));
+
+        console.log(`✅ ${tracks.length} morceaux chargés depuis Cloudinary`);
+    } catch (err) {
+        console.error('Erreur chargement Cloudinary:', err);
     }
-});
+}
 
-// === GET /api/tracks - Liste des morceaux ===
-app.get('/api/tracks', (req, res) => {
-    res.json(tracks);
-});
-
-// === POST /api/admin/add - Upload vers Cloudinary ===
+// === POST /api/admin/add ===
 app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }]), (req, res) => {
     const { title, artist, genre } = req.body;
     const audioFile = req.files['audio'][0];
     const coverFile = req.files['cover'] ? req.files['cover'][0] : null;
 
-    // Upload audio
     const uploadAudioStream = cloudinary.uploader.upload_stream(
         { resource_type: 'video', folder: 'pariszik-audio' },
         (error, audioResult) => {
@@ -95,15 +98,20 @@ app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }])
     streamifier.createReadStream(audioFile.buffer).pipe(uploadAudioStream);
 });
 
+// === GET /api/tracks ===
+app.get('/api/tracks', (req, res) => {
+    res.json(tracks);
+});
+
 // === DELETE /api/admin/delete/:id ===
 app.delete('/api/admin/delete/:id', (req, res) => {
     tracks = tracks.filter(t => t.id != req.params.id);
     res.json({ success: true });
 });
 
-// === Démarrage du serveur ===
-const PORT = process.env.PORT || 3000; // ✅ Ne JAMAIS forcer 8080
-app.listen(PORT, () => {
+// === Démarrage ===
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, async () => {
     console.log(`🚀 Serveur lancé sur le port ${PORT}`);
-    console.log(`🔗 API disponible : https://pariszik-server-production.up.railway.app`);
+    await loadTracksFromCloudinary(); // Charger les anciens morceaux
 });
