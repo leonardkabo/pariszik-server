@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -25,12 +26,12 @@ app.use(express.json());
 // === Upload ===
 const upload = multer({ storage: multer.memoryStorage() });
 
-// === Liste des morceaux ===
+// === Liste des morceaux (en mémoire) ===
 let tracks = [];
 
 // === POST /api/admin/add ===
 app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }]), (req, res) => {
-    const { title, artist } = req.body;
+    const { title, artist, genre } = req.body;
     const audioFile = req.files['audio'][0];
     const coverFile = req.files['cover'] ? req.files['cover'][0] : null;
 
@@ -62,6 +63,7 @@ app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }])
             id: Date.now(),
             title: title || 'Sans titre',
             artist: artist || 'Inconnu',
+            genre: genre || 'Inconnu',
             fileURL: audioResult.secure_url,
             cover: coverURL
         };
