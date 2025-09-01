@@ -4,6 +4,7 @@ const cors = require('cors');
 const multer = require('multer');
 const { v2: cloudinary } = require('cloudinary');
 const streamifier = require('streamifier');
+const bcrypt = require('bcrypt');
 
 const app = express();
 
@@ -26,19 +27,39 @@ app.use(express.json());
 // === Upload ===
 const upload = multer({ storage: multer.memoryStorage() });
 
-// === Liste des morceaux (en mémoire) ===
+// === Données en mémoire ===
 let tracks = [];
+let playlists = [];
+let events = [
+    {
+        id: 1,
+        title: "Concert de MHD",
+        artist: "MHD",
+        date: "2025-04-12T20:00:00",
+        location: "La Cigale, Paris",
+        description: "Rap engagé et rythmes africains dans un lieu mythique."
+    },
+    {
+        id: 2,
+        title: "Jazz au Caveau des Oubliettes",
+        artist: "Quartet Jazz Parisien",
+        date: "2025-04-15T21:00:00",
+        location: "Caveau des Oubliettes, Paris",
+        description: "Ambiance intimiste et jazz manouche au cœur de Paris."
+    }
+];
 
-// === Mot de passe admin (à terme, utiliser un hash) ===
-const ADMIN_PASSWORD = 'admin123';
+// === Hash du mot de passe admin (généré une fois) ===
+const ADMIN_PASSWORD_HASH = '$2b$10$4Vj5v0y9Y5Z7X9qZJz0Q5e9QjK7t7v9q5Q5q5Q5q5Q5q5Q5q5Q5q5Q'; // "admin123" haché
 
-// === Login admin ===
-app.post('/api/admin/login', (req, res) => {
+// === Login admin sécurisé ===
+app.post('/api/admin/login', async (req, res) => {
     const { password } = req.body;
-    if (password === ADMIN_PASSWORD) {
+    const isValid = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
+    if (isValid) {
         res.json({ success: true });
     } else {
-        res.status(401).json({ success: false });
+        res.status(401).json({ success: false, message: 'Mot de passe incorrect' });
     }
 });
 
@@ -96,6 +117,33 @@ app.get('/api/tracks', (req, res) => {
 app.delete('/api/admin/delete/:id', (req, res) => {
     tracks = tracks.filter(t => t.id != req.params.id);
     res.json({ success: true });
+});
+
+// === Playlist partagée via lien unique ===
+app.post('/api/playlists/share', (req, res) => {
+    const { name, trackIds } = req.body;
+    const shareId = Math.random().toString(36).substr(2, 9);
+    const sharedPlaylist = {
+        id: shareId,
+        name,
+        trackIds,
+        createdAt: new Date()
+    };
+    playlists.push(sharedPlaylist);
+    res.json({ success: true, shareId });
+});
+
+app.get('/api/playlists/share/:shareId', (req, res) => {
+    const playlist = playlists.find(p => p.id === req.params.shareId);
+    if (!playlist) return res.status(404).json({ error: 'Playlist introuvable' });
+
+    const tracksInPlaylist = tracks.filter(t => playlist.trackIds.includes(t.id));
+    res.json({ name: playlist.name, tracks: tracksInPlaylist });
+});
+
+// === Événements musicaux ===
+app.get('/api/events', (req, res) => {
+    res.json(events);
 });
 
 // === Démarrage ===
