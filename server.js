@@ -29,6 +29,19 @@ const upload = multer({ storage: multer.memoryStorage() });
 // === Liste des morceaux (en mémoire) ===
 let tracks = [];
 
+// === Mot de passe admin (à terme, utiliser un hash) ===
+const ADMIN_PASSWORD = 'admin123';
+
+// === Login admin ===
+app.post('/api/admin/login', (req, res) => {
+    const { password } = req.body;
+    if (password === ADMIN_PASSWORD) {
+        res.json({ success: true });
+    } else {
+        res.status(401).json({ success: false });
+    }
+});
+
 // === POST /api/admin/add ===
 app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }]), (req, res) => {
     const { title, artist, genre } = req.body;
