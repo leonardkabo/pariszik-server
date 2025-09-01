@@ -4,7 +4,6 @@ const cors = require('cors');
 const multer = require('multer');
 const { v2: cloudinary } = require('cloudinary');
 const streamifier = require('streamifier');
-const bcrypt = require('bcrypt');
 
 const app = express();
 
@@ -15,67 +14,61 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET || 'bVu5BMIRfkSPUmiz8nLgZP03hzA'
 });
 
-// === CORS ===
+// === CORS pour Netlify ===
 app.use(cors({
     origin: 'https://pariszik.netlify.app',
     methods: ['GET', 'POST', 'DELETE'],
     allowedHeaders: ['Content-Type']
 }));
 
+// === Middleware ===
 app.use(express.json());
 
-// === Upload ===
+// === Upload en mémoire (via multer) ===
 const upload = multer({ storage: multer.memoryStorage() });
 
-// === Données en mémoire ===
-let tracks = [];
-let playlists = [];
-let events = [
+// === Stockage en mémoire des morceaux ===
+let tracks = [
     {
         id: 1,
-        title: "Concert de MHD",
-        artist: "MHD",
-        date: "2025-04-12T20:00:00",
-        location: "La Cigale, Paris",
-        description: "Rap engagé et rythmes africains dans un lieu mythique."
-    },
-    {
-        id: 2,
-        title: "Jazz au Caveau des Oubliettes",
-        artist: "Quartet Jazz Parisien",
-        date: "2025-04-15T21:00:00",
-        location: "Caveau des Oubliettes, Paris",
-        description: "Ambiance intimiste et jazz manouche au cœur de Paris."
+        title: "Métro, boulot, dream",
+        artist: "DJ Metro",
+        genre: "Rap",
+        fileURL: "https://res.cloudinary.com/demo/video/upload/v123/sample.mp3",
+        cover: "https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp"
     }
 ];
 
-// === Hash du mot de passe admin (généré une fois) ===
-const ADMIN_PASSWORD_HASH = '$2b$10$4Vj5v0y9Y5Z7X9qZJz0Q5e9QjK7t7v9q5Q5q5Q5q5Q5q5Q5q5Q5q5Q'; // "admin123" haché
-
-// === Login admin sécurisé ===
-app.post('/api/admin/login', async (req, res) => {
+// === 🔐 Route de login admin ===
+app.post('/api/admin/login', (req, res) => {
     const { password } = req.body;
-    const isValid = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
-    if (isValid) {
-        res.json({ success: true });
+    if (password === 'admin123') {
+        return res.json({ success: true });
     } else {
-        res.status(401).json({ success: false, message: 'Mot de passe incorrect' });
+        return res.status(401).json({ success: false, message: 'Mot de passe incorrect' });
     }
 });
 
-// === POST /api/admin/add ===
+// === GET /api/tracks - Liste des morceaux ===
+app.get('/api/tracks', (req, res) => {
+    res.json(tracks);
+});
+
+// === POST /api/admin/add - Upload audio + cover vers Cloudinary ===
 app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }]), (req, res) => {
     const { title, artist, genre } = req.body;
     const audioFile = req.files['audio'][0];
     const coverFile = req.files['cover'] ? req.files['cover'][0] : null;
 
+    // Upload audio vers Cloudinary
     const uploadAudioStream = cloudinary.uploader.upload_stream(
         { resource_type: 'video', folder: 'pariszik-audio' },
         (error, audioResult) => {
-            if (error) return res.status(500).json({ error: 'Upload audio échoué' });
+            if (error) return res.status(500).json({ error: 'Échec upload audio' });
 
             let coverURL = 'https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp';
 
+            // Si une cover est fournie, upload vers Cloudinary
             if (coverFile) {
                 const uploadCoverStream = cloudinary.uploader.upload_stream(
                     { resource_type: 'image', folder: 'pariszik-covers' },
@@ -92,6 +85,7 @@ app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }])
         }
     );
 
+    // Fonction pour sauvegarder le morceau
     function saveTrack(audioResult, coverURL) {
         const newTrack = {
             id: Date.now(),
@@ -101,53 +95,25 @@ app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }])
             fileURL: audioResult.secure_url,
             cover: coverURL
         };
+
         tracks.unshift(newTrack);
         res.json(newTrack);
     }
 
+    // Commence l'upload du fichier audio
     streamifier.createReadStream(audioFile.buffer).pipe(uploadAudioStream);
 });
 
-// === GET /api/tracks ===
-app.get('/api/tracks', (req, res) => {
-    res.json(tracks);
-});
-
-// === DELETE /api/admin/delete/:id ===
+// === DELETE /api/admin/delete/:id - Supprime un morceau ===
 app.delete('/api/admin/delete/:id', (req, res) => {
-    tracks = tracks.filter(t => t.id != req.params.id);
+    const id = parseInt(req.params.id);
+    tracks = tracks.filter(t => t.id !== id);
     res.json({ success: true });
 });
 
-// === Playlist partagée via lien unique ===
-app.post('/api/playlists/share', (req, res) => {
-    const { name, trackIds } = req.body;
-    const shareId = Math.random().toString(36).substr(2, 9);
-    const sharedPlaylist = {
-        id: shareId,
-        name,
-        trackIds,
-        createdAt: new Date()
-    };
-    playlists.push(sharedPlaylist);
-    res.json({ success: true, shareId });
-});
-
-app.get('/api/playlists/share/:shareId', (req, res) => {
-    const playlist = playlists.find(p => p.id === req.params.shareId);
-    if (!playlist) return res.status(404).json({ error: 'Playlist introuvable' });
-
-    const tracksInPlaylist = tracks.filter(t => playlist.trackIds.includes(t.id));
-    res.json({ name: playlist.name, tracks: tracksInPlaylist });
-});
-
-// === Événements musicaux ===
-app.get('/api/events', (req, res) => {
-    res.json(events);
-});
-
-// === Démarrage ===
+// === Démarrage du serveur ===
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Serveur lancé sur le port ${PORT}`);
+    console.log(`🔗 API disponible : https://pariszik-server-production.up.railway.app`);
 });
