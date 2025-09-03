@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -23,44 +24,65 @@ app.use(cors({
 
 app.use(express.json());
 
-// === Upload ===
+// === Upload via mémoire (multer) ===
 const upload = multer({ storage: multer.memoryStorage() });
 
-// === Liste des morceaux ===
+// === Liste des morceaux (sera remplie au démarrage) ===
 let tracks = [];
 
 // === Mot de passe admin haché (admin123) ===
-const ADMIN_PASSWORD_HASH = '$2b$10$4Vj5v0y9Y5Z7X9qZJz0Q5e9QjK7t7v9q5Q5q5Q5q5Q5q5Q5q5Q5q5Q'; // "admin123"
+const ADMIN_PASSWORD = 'admin123';
+let ADMIN_PASSWORD_HASH;
 
-// === 🔐 Login admin sécurisé ===
+// Hasher le mot de passe au démarrage
+bcrypt.hash(ADMIN_PASSWORD, 10, (err, hash) => {
+    if (err) {
+        console.error('Erreur hachage mot de passe:', err);
+    } else {
+        ADMIN_PASSWORD_HASH = hash;
+        console.log('✅ Mot de passe admin haché');
+    }
+});
+
+// === 🔐 Route de login admin ===
 app.post('/api/admin/login', async (req, res) => {
     const { password } = req.body;
     if (!password) {
         return res.status(400).json({ success: false, message: 'Mot de passe requis' });
     }
+
     try {
         const isValid = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
         if (isValid) {
-            res.json({ success: true });
+            return res.json({ success: true });
         } else {
-            res.status(401).json({ success: false, message: 'Mot de passe incorrect' });
+            return res.status(401).json({ success: false, message: 'Mot de passe incorrect' });
         }
     } catch (err) {
-        console.error('Erreur login admin:', err);
-        res.status(500).json({ success: false, message: 'Erreur serveur' });
+        console.error('Erreur login:', err);
+        return res.status(500).json({ success: false, message: 'Erreur serveur' });
     }
 });
 
-// === POST /api/admin/add ===
+// === GET /api/tracks - Liste des morceaux ===
+app.get('/api/tracks', (req, res) => {
+    res.json(tracks);
+});
+
+// === POST /api/admin/add - Upload vers Cloudinary ===
 app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }]), (req, res) => {
     const { title, artist, genre } = req.body;
     const audioFile = req.files['audio'][0];
     const coverFile = req.files['cover'] ? req.files['cover'][0] : null;
 
+    // Stream vers Cloudinary
     const uploadAudioStream = cloudinary.uploader.upload_stream(
         { resource_type: 'video', folder: 'pariszik-audio' },
         (error, audioResult) => {
-            if (error) return res.status(500).json({ error: 'Upload audio échoué' });
+            if (error) {
+                console.error('Upload audio échoué:', error);
+                return res.status(500).json({ error: 'Upload audio échoué' });
+            }
 
             let coverURL = 'https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp';
 
@@ -68,7 +90,7 @@ app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }])
                 const uploadCoverStream = cloudinary.uploader.upload_stream(
                     { resource_type: 'image', folder: 'pariszik-covers' },
                     (err, coverResult) => {
-                        if (err) console.error('Cover upload failed:', err);
+                        if (err) console.error('Upload cover échoué:', err);
                         coverURL = coverResult?.secure_url || coverURL;
                         saveTrack(audioResult, coverURL);
                     }
@@ -96,15 +118,16 @@ app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }])
     streamifier.createReadStream(audioFile.buffer).pipe(uploadAudioStream);
 });
 
-// === GET /api/tracks ===
-app.get('/api/tracks', (req, res) => {
-    res.json(tracks);
-});
-
 // === DELETE /api/admin/delete/:id ===
 app.delete('/api/admin/delete/:id', (req, res) => {
-    tracks = tracks.filter(t => t.id != req.params.id);
-    res.json({ success: true });
+    const id = req.params.id;
+    const lengthBefore = tracks.length;
+    tracks = tracks.filter(t => t.id != id);
+    if (tracks.length < lengthBefore) {
+        res.json({ success: true });
+    } else {
+        res.status(404).json({ success: false, message: 'Morceau non trouvé' });
+    }
 });
 
 // === Partage de playlist ===
@@ -126,8 +149,34 @@ app.get('/api/playlists/share/:shareId', (req, res) => {
     res.json({ name: playlist.name, tracks: tracksInPlaylist });
 });
 
-// === Démarrage ===
+// === Charger les morceaux existants depuis Cloudinary au démarrage ===
+async function loadTracksFromCloudinary() {
+    try {
+        const result = await cloudinary.api.resources({
+            type: 'upload',
+            resource_type: 'video',
+            prefix: 'pariszik-audio',
+            max_results: 100
+        });
+
+        tracks = result.resources.map(file => ({
+            id: file.asset_id,
+            title: file.original_filename.replace('.mp3', '').split('-')[0] || 'Sans titre',
+            artist: file.original_filename.replace('.mp3', '').split('-')[1] || 'Inconnu',
+            genre: 'Inconnu',
+            fileURL: file.secure_url,
+            cover: 'https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp'
+        }));
+
+        console.log(`✅ ${tracks.length} morceaux chargés depuis Cloudinary`);
+    } catch (err) {
+        console.error('Erreur chargement Cloudinary:', err);
+    }
+}
+
+// === Démarrage du serveur ===
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`🚀 Serveur lancé sur le port ${PORT}`);
+    await loadTracksFromCloudinary(); // Charger les morceaux existants
 });
