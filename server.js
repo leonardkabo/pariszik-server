@@ -6,7 +6,7 @@ const { Mega } = require('mega');
 
 const app = express();
 
-// === Configuration MEGA ===
+// === Identifiants MEGA (à remplacer par des variables d'environnement plus tard) ===
 const MEGA_EMAIL = 'leonardkabo32@gmail.com';
 const MEGA_PASSWORD = 'pariszik@2025';
 
@@ -17,16 +17,12 @@ app.use(express.json());
 // === Upload via mémoire ===
 const upload = multer({ storage: multer.memoryStorage() });
 
-// === Liste des morceaux ===
+// === Liste des morceaux (en mémoire) ===
 let tracks = [];
 
-// === Connexion MEGA (globale) ===
-const mega = new Mega({
-    email: MEGA_EMAIL,
-    password: MEGA_PASSWORD
-});
+// === Connexion MEGA ===
+const mega = new Mega({ email: MEGA_EMAIL, password: MEGA_PASSWORD });
 
-// Attendre que MEGA soit prêt
 app.use(async (req, res, next) => {
     if (!mega.isReady) {
         try {
@@ -34,6 +30,7 @@ app.use(async (req, res, next) => {
             console.log('✅ Connecté à MEGA');
         } catch (err) {
             console.error('❌ Échec connexion MEGA:', err);
+            return res.status(500).json({ error: 'Échec connexion MEGA' });
         }
     }
     next();
@@ -45,23 +42,21 @@ app.get('/api/tracks', (req, res) => {
 });
 
 // === Route : Upload vers MEGA ===
-app.post('/api/admin/add-to-mega', upload.fields([{ name: 'audio' }, { name: 'cover' }]), async (req, res) => {
+app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }]), async (req, res) => {
     try {
         const { title, artist, genre } = req.body;
         const audioBuffer = req.files['audio'][0].buffer;
         const coverBuffer = req.files['cover'] ? req.files['cover'][0].buffer : null;
 
         // Upload audio
-        const audioFilename = req.files['audio'][0].originalname;
-        const audioNode = await mega.upload(audioBuffer, audioFilename);
+        const audioNode = await mega.upload(audioBuffer, req.files['audio'][0].originalname);
         const audioLink = await audioNode.link();
         const audioURL = audioLink.toString();
 
         // Upload cover
         let coverURL = 'https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp';
         if (coverBuffer) {
-            const coverFilename = req.files['cover'][0].originalname;
-            const coverNode = await mega.upload(coverBuffer, coverFilename);
+            const coverNode = await mega.upload(coverBuffer, req.files['cover'][0].originalname);
             const coverLink = await coverNode.link();
             coverURL = coverLink.toString();
         }
@@ -69,8 +64,8 @@ app.post('/api/admin/add-to-mega', upload.fields([{ name: 'audio' }, { name: 'co
         // Créer le morceau
         const newTrack = {
             id: Date.now(),
-            title: title || audioFilename.replace('.mp3', '').split('-')[0] || 'Sans titre',
-            artist: artist || audioFilename.replace('.mp3', '').split('-')[1] || 'Inconnu',
+            title: title || 'Sans titre',
+            artist: artist || 'Inconnu',
             genre: genre || 'Inconnu',
             fileURL: audioURL,
             cover: coverURL
@@ -81,12 +76,42 @@ app.post('/api/admin/add-to-mega', upload.fields([{ name: 'audio' }, { name: 'co
 
     } catch (err) {
         console.error('❌ Erreur upload MEGA:', err);
-        res.status(500).json({ error: 'Upload échoué', details: err.message });
+        res.status(500).json({ error: 'Upload échoué' });
     }
 });
 
-// === Routes admin, delete, playlists, etc. ===
-// (identiques à avant)
+// === Supprimer morceau ===
+app.delete('/api/admin/delete/:id', (req, res) => {
+    tracks = tracks.filter(t => t.id != req.params.id);
+    res.json({ success: true });
+});
+
+// === Login admin ===
+app.post('/api/admin/login', (req, res) => {
+    const { password } = req.body;
+    if (password === 'admin123') {
+        res.json({ success: true });
+    } else {
+        res.status(401).json({ success: false, message: 'Mot de passe incorrect' });
+    }
+});
+
+// === Partage de playlist ===
+let sharedPlaylists = [];
+
+app.post('/api/playlists/share', (req, res) => {
+    const { name, trackIds } = req.body;
+    const shareId = Math.random().toString(36).substr(2, 9);
+    sharedPlaylists.push({ id: shareId, name, trackIds });
+    res.json({ success: true, shareId });
+});
+
+app.get('/api/playlists/share/:shareId', (req, res) => {
+    const playlist = sharedPlaylists.find(p => p.id === req.params.shareId);
+    if (!playlist) return res.status(404).json({ error: 'Playlist introuvable' });
+    const tracksInPlaylist = tracks.filter(t => playlist.trackIds.includes(t.id));
+    res.json({ name: playlist.name, tracks: tracksInPlaylist });
+});
 
 // === Démarrage ===
 const PORT = process.env.PORT || 3000;
