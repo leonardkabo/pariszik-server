@@ -1,0 +1,16 @@
+# Dépendances
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+
+# Variables d'environnement
+.env
+.env.local
+
+# Éditeurs
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.bak

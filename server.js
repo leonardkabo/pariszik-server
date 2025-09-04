@@ -69,6 +69,60 @@ app.get('/api/tracks', (req, res) => {
     res.json(tracks);
 });
 
+const { MEGA } = require('megajs');
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Infos MEGA
+const MEGA_EMAIL = 'leonardkabo32@gmail.com';
+const MEGA_PASSWORD = 'pariszik@2025';
+
+// Route : /api/admin/add-to-mega
+app.post('/api/admin/add-to-mega', upload.fields([{ name: 'audio' }, { name: 'cover' }]), async (req, res) => {
+    try {
+        const { title, artist, genre } = req.body;
+        const audioBuffer = req.files['audio'][0].buffer;
+        const coverBuffer = req.files['cover'] ? req.files['cover'][0].buffer : null;
+
+        // Connexion à MEGA
+        const storage = new MEGA({ email: MEGA_EMAIL, password: MEGA_PASSWORD });
+        await storage.login();
+
+        // Upload audio
+        const audioStream = require('stream').Readable.from(audioBuffer);
+        const audioFile = await storage.upload({ name: req.files['audio'][0].originalname }, audioStream);
+        const audioURL = audioFile.publicLink();
+
+        // Upload cover (si présente)
+        let coverURL = 'https://raw.githubusercontent.com/leonardkabo/pariszik-web/main/assets/default-cover.webp';
+        if (coverBuffer) {
+            const coverStream = require('stream').Readable.from(coverBuffer);
+            const coverFile = await storage.upload({ name: req.files['cover'][0].originalname }, coverStream);
+            coverURL = coverFile.publicLink();
+        }
+
+        // Créer le nouveau morceau
+        const newTrack = {
+            id: Date.now(),
+            title: title || 'Sans titre',
+            artist: artist || 'Inconnu',
+            genre: genre || 'Inconnu',
+            fileURL: audioURL,
+            cover: coverURL
+        };
+
+        // Ajouter à la liste locale
+        tracks.unshift(newTrack);
+
+        // Répondre au frontend
+        res.json(newTrack);
+
+    } catch (err) {
+        console.error('Erreur upload MEGA:', err);
+        res.status(500).json({ error: 'Upload échoué' });
+    }
+});
+
+
 // === POST /api/admin/add - Upload vers Cloudinary ===
 app.post('/api/admin/add', upload.fields([{ name: 'audio' }, { name: 'cover' }]), (req, res) => {
     const { title, artist, genre } = req.body;
